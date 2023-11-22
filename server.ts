@@ -1,12 +1,16 @@
 require('dotenv').config()
 import path from 'path'
-import methodOverride from 'method-override'
+//import methodOverride from 'method-override'
+const methodOverride = require('method-override')
+
 import express from 'express'
 import cors from 'cors'
 import routes from './routes'
 
 const APP_PORT = process.env.APP_PORT || 3000
 const app = express()
+
+//export const app = express()
 
 app.use(methodOverride('_method'))
 app.use(express.static(path.join(__dirname, 'public')))

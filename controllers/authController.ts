@@ -1,90 +1,81 @@
-import { Request, Response } from "express";
-import User, { IUser } from "../models/User";
-const jwt = require("jsonwebtoken");
-const bcrypt = require("bcryptjs");
-import formidable, { Fields, Files } from "formidable";
+import { Request, Response } from 'express'
+import User from '../models/User'
+import jwt from 'jsonwebtoken'
+import bcrypt from 'bcryptjs'
 
-// Controlador para registrar un nuevo usuario
-export async function registerUser(req: Request, res: Response) {
-  const form = formidable({
-    multiples: false,
-    uploadDir: __dirname + "/../public/img",
-    keepExtensions: true,
-  });
-
-  form.parse(req, async (err: any, fields: formidable.Fields, files: formidable.Files) => {
-    console.log(fields.username);
-    const existingUser = await User.findOne({
-      username: fields.username,
-    });
-
-    if (existingUser) {
-      return res.status(409).send({ message: "Ya existe usuario con el Username." });
-    } else {
-      // const stringifyPass = fields.password; ???
-      const newUser = await User.create({
-        nombre: fields.nombre,
-        biografia: fields.biografia,
-        username: fields.username,
-        password: fields.password,
-      });
-
-      if (files.avatar_url) {
-        newUser.avatar_url = files.avatar_url[0].newFilename;
-        newUser.save();
-      }
-      if (newUser) {
-        const token = jwt.sign({ userId: newUser.id }, process.env.JWT_SECRET_KEY, {
-          expiresIn: "1h",
-        });
-        const userToFront = { userId: newUser.id, token: token, username: newUser.username };
-
-        return res.status(201).json(userToFront);
-      } else {
-        return res.status(502).send({ message: "Usuario no ha sido creado, intente de nuevo." });
-      }
-    }
-  });
-}
+// Esto me sirve para que funcione el logout en Postman
+import { addToBlacklist } from '../Auth/blacklist'
 
 // Controlador para iniciar sesión
-export async function loginUser(req: Request, res: Response) {
+async function loginUser(req: Request, res: Response) {
   try {
-    const { username, password } = req.body;
-    const user: IUser | null = await User.findOne({ username });
+    const { username, password } = req.body
+    const user = await User.findOne({ username })
 
-    // Modificar después para "Credenciales incorrectas."
     if (!user) {
-      return res.status(401).json({ error: "Usuario no encontrado" });
+      return res.status(401).json({ error: 'Usuario no encontrado' })
     }
 
-    const isPasswordValid: boolean = await bcrypt.compare(password, user.password);
+    const isPasswordValid = await bcrypt.compare(password, user.password)
 
     if (!isPasswordValid) {
-      return res.status(401).json({ error: "Contraseña incorrecta" });
+      return res.status(401).json({ error: 'Contraseña incorrecta' })
     }
 
-    // Generar un token JWT
-    const token: string = jwt.sign(
+    const token = jwt.sign(
       { username: user.username, _id: user._id },
-      process.env.JWT_SECRET_KEY,
-      { expiresIn: "1h" },
-    );
+      process.env.JWT_SECRET_KEY || ''
+      //{ expiresIn: '2h' }
+    )
 
-    res.status(200).json(user);
+    //console.log('Token generado en el controlador:', token) // Agrega esta línea
+
+    res.status(200).json({ token })
   } catch (error) {
-    res.status(500).json({ error: "Error al iniciar sesión" });
+    res.status(500).json({ error: 'Error al iniciar sesión' })
   }
 }
 
 // Controlador para cerrar sesión
-export async function logout(req: Request, res: Response) {
-  res.clearCookie("token");
-  console.log("Sesión cerrada con éxito");
-  res.status(200).json({ message: "Sesión cerrada con éxito" });
+function logout(req: Request, res: Response) {
+  try {
+    const token = req.header('Authorization') // Obtén el token del encabezado
+
+    if (!token) {
+      return res.status(401).json({ error: 'Token no proporcionado.' })
+    }
+
+    // Agrega el token a la lista negra antes de borrar la cookie o realizar cualquier acción adicional
+    addToBlacklist(token)
+
+    // Luego, elimina la cookie
+    res.clearCookie('token')
+
+    return res.json({ message: 'Sesión cerrada con éxito' })
+  } catch (error) {
+    console.error(error)
+    return res.status(500).json({ message: 'Error al cerrar sesión.' })
+  }
 }
 
-//module.exports = { registerUser, loginUser, logout };
-/*export function registerUser(arg0: string, loginUser: any) {
-  throw new Error("Function not implemented.");
-}*/
+// En el controlador del backend para obtener los datos del usuario logueado
+async function getUserProfile(req: Request, res: Response) {
+  try {
+    // Aquí debes buscar el perfil del usuario en la base de datos usando el username proporcionado en req.params
+    const userProfile = await User.findOne({ username: req.params.username })
+
+    if (!userProfile) {
+      return res.status(404).json({ error: 'Usuario no encontrado' })
+    }
+
+    // Si el usuario se encuentra, devuélvelo como respuesta
+    return res.status(200).json(userProfile)
+  } catch (error) {
+    console.error('Error al obtener el perfil del usuario:', error)
+    return res
+      .status(500)
+      .json({ error: 'Error al obtener el perfil del usuario' })
+  }
+}
+
+export { loginUser, logout, getUserProfile }
