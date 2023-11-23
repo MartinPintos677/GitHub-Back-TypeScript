@@ -1,126 +1,158 @@
-import { Request, Response } from "express";
-const Repository = require("../models/Repository"); // Asegúrate de importar tu modelo Repository
+import { Request, Response } from 'express'
+import SearchRepository, { ISearchRepository } from '../models/SearchRepository'
+import { IUser } from '../models/User'
+import axios from 'axios'
 
-// Listar todos los repositorios
-export async function index(req: Request, res: Response) {
-  try {
-    const repositories = await Repository.find();
-    return res.status(200).json(repositories);
-  } catch (error) {
-    return res.status(500).json({ error: "Error al listar los repositorios" });
+interface AuthenticatedRequest extends Request {
+  user?: IUser
+  body: {
+    searchTerm: string // Asegúrate de que el tipo de searchTerm sea correcto
   }
 }
 
-// Obtener un repositorio por ID
-export async function show(req: Request, res: Response) {
-  const { id } = req.params;
+// Controlador para realizar una búsqueda en la API de GitHub y guardar los resultados
+const searchAndSaveResults = async (
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<void> => {
+  const { searchTerm } = req.body
+  const userId = (req.user as IUser)?._id
+
+  // Convertir el término de búsqueda a minúsculas
+  const searchTermLowercase = searchTerm.toLowerCase()
+
   try {
-    const repository = await Repository.findById(id);
-    if (!repository) {
-      return res.status(404).json({ message: "Repositorio no encontrado" });
+    const existingSearch = await SearchRepository.findOne({
+      search: searchTermLowercase
+    })
+
+    if (existingSearch) {
+      res.status(200).json(existingSearch.toObject())
+    } else {
+      const {
+        data: { items: githubRepos }
+      } = await axios.get(
+        `https://api.github.com/search/repositories?q=${searchTerm}&per_page=100`
+      )
+
+      const reposList = githubRepos.map((repo: any) => ({
+        name: repo.name,
+        user: repo.owner.login,
+        description: repo.description,
+        language: repo.language,
+        url: repo.url,
+        created_at: repo.created_at,
+        pushed_at: repo.pushed_at
+      }))
+
+      // Crear un nuevo registro de búsqueda en la base de datos y asociarlo al usuario autenticado
+      const newSearch = new SearchRepository({
+        search: searchTermLowercase,
+        reposlist: reposList,
+        comment: '',
+        user: userId
+      })
+
+      const savedSearch = await newSearch.save()
+
+      res.status(201).json(savedSearch.toObject())
     }
-    return res.status(200).json(repository);
   } catch (error) {
-    return res.status(500).json({ error: "Error al obtener el repositorio" });
+    res
+      .status(500)
+      .json({ error: 'Error al obtener las búsquedas de repositorios' })
   }
 }
 
-// Buscar repositorios por nombre
-export async function findRepositoryByName(req: Request, res: Response) {
-  const { repositoryName } = req.params;
-
+// Controlador para obtener todas las búsquedas de repositorios
+const getAllSearchRepositories = async (
+  _req: Request,
+  res: Response
+): Promise<void> => {
   try {
-    const repository = await Repository.findOne({ nombre: repositoryName });
-
-    if (!repository) {
-      return res.status(404).json({ error: "Repositorio no encontrado" });
-    }
-
-    res.status(200).json(repository);
+    const searches = await SearchRepository.find()
+    res.status(200).json(searches)
   } catch (error) {
-    res.status(500).json({ error: "Error al buscar repositorio por nombre" });
+    res
+      .status(500)
+      .json({ error: 'Error al obtener las búsquedas de repositorios' })
   }
 }
 
-// Crear un nuevo repositorio
-export async function store(req: Request, res: Response) {
-  const { nombre, descripcion, tecnologia, tecnologias, publico } = req.body;
-  const userId = req.user._id; // Obtén el ID del usuario actualmente autenticado
-
-  const newRepository = new Repository({
-    nombre,
-    descripcion,
-    tecnologia,
-    tecnologias,
-    publico,
-    autor: userId,
-  });
-
+// Controlador para obtener una búsqueda de repositorios por su ID
+const getSearchRepositoryById = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  const { id } = req.params
   try {
-    await newRepository.save();
-    return res.status(201).json(newRepository);
+    const searchRepository = await SearchRepository.findById(id).populate(
+      'user',
+      'username'
+    )
+    if (!searchRepository) {
+      res.status(404).json({ error: 'Búsqueda de repositorios no encontrada' })
+    } else {
+      res.status(200).json(searchRepository)
+    }
   } catch (error) {
-    return res.status(500).json({ error: "Error al crear el repositorio" });
+    res
+      .status(500)
+      .json({ error: 'Error al obtener la búsqueda de repositorios' })
   }
 }
 
-// Actualizar un repositorio por ID
-export async function update(req: Request, res: Response) {
-  const { id } = req.params;
-  const { nombre, descripcion, tecnologia, tecnologias, publico } = req.body;
-
+// Controlador para actualizar una búsqueda de repositorios por su ID
+const updateSearchRepositoryById = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  const { id } = req.params
+  const { comment } = req.body
   try {
-    const repository = await Repository.findById(id);
-    if (!repository) {
-      return res.status(404).json({ message: "Repositorio no encontrado" });
+    const updatedSearchRepository = await SearchRepository.findByIdAndUpdate(
+      id,
+      { comment, updatedAt: new Date() },
+      { new: true }
+    )
+    if (!updatedSearchRepository) {
+      res.status(404).json({ error: 'Búsqueda de repositorios no encontrada' })
+    } else {
+      res.status(200).json({ message: 'Modificación realizada con éxito' })
     }
-
-    // Actualiza los campos del repositorio según los datos recibidos
-    if (nombre) {
-      repository.nombre = nombre;
-    }
-    if (descripcion) {
-      repository.descripcion = descripcion;
-    }
-    if (tecnologia) {
-      repository.tecnologia = tecnologia;
-    }
-    if (tecnologias) {
-      repository.tecnologias = tecnologias;
-    }
-    if (publico !== undefined) {
-      repository.publico = publico;
-    }
-
-    await repository.save();
-    return res.status(200).json(repository);
   } catch (error) {
-    return res.status(500).json({ error: "Error al actualizar el repositorio" });
+    res
+      .status(500)
+      .json({ error: 'Error al actualizar la búsqueda de repositorios' })
   }
 }
 
-// Eliminar un repositorio por ID
-export async function destroy(req: Request, res: Response) {
-  const { id } = req.params;
-
+// Controlador para eliminar una búsqueda de repositorios por su ID
+const deleteSearchRepositoryById = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  const { id } = req.params
   try {
-    const repository = await Repository.findById(id);
-    if (!repository) {
-      return res.status(404).json({ message: "Repositorio no encontrado" });
+    const deletedSearchRepository = await SearchRepository.findByIdAndRemove(id)
+    if (!deletedSearchRepository) {
+      res.status(404).json({ error: 'Búsqueda de repositorios no encontrada' })
+    } else {
+      res
+        .status(200)
+        .json({ message: 'Búsqueda de repositorio eliminada con éxito' })
     }
-
-    await repository.remove();
-    return res.status(204).send();
   } catch (error) {
-    return res.status(500).json({ error: "Error al eliminar el repositorio" });
+    res
+      .status(500)
+      .json({ error: 'Error al eliminar la búsqueda de repositorios' })
   }
 }
 
-/*module.exports = {
-  index,
-  show,
-  store,
-  update,
-  destroy,
-  findRepositoryByName,
-};*/
+export {
+  searchAndSaveResults,
+  getAllSearchRepositories,
+  getSearchRepositoryById,
+  updateSearchRepositoryById,
+  deleteSearchRepositoryById
+}

@@ -1,4 +1,4 @@
-const mongoose = require('mongoose')
+/*const mongoose = require('mongoose')
 const Schema = mongoose.Schema
 
 //mongoose.connect(process.env.DB_CONNECTION)
@@ -8,4 +8,25 @@ mongoose.connect(process.env.DB_CONNECTION, {
   useUnifiedTopology: true
 })
 
-export default { mongoose, Schema }
+export default { mongoose, Schema }*/
+
+// db.ts
+
+import mongoose, { Connection } from 'mongoose'
+
+mongoose.connect(process.env.DB_CONNECTION)
+
+const db: { mongoose: typeof mongoose; db: Connection } = {
+  mongoose,
+  db: mongoose.connection
+}
+
+db.db.on(
+  'error',
+  console.error.bind(console, 'Error de conexión a la base de datos:')
+)
+db.db.once('open', () => {
+  console.log('Conexión a la base de datos exitosa.')
+})
+
+export default db
