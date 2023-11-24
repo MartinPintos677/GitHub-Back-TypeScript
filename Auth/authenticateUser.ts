@@ -22,11 +22,7 @@ function authenticateUser(
       req.user = decoded
       next()
     } catch (error) {
-      //res.status(401).json({ error: 'Usuario no autorizado.' })
-      console.error('Error al iniciar sesión:', error)
-      res
-        .status(500)
-        .json({ error: 'Error al iniciar sesión', details: error.message })
+      res.status(401).json({ error: 'Usuario no autorizado.' })
     }
   }
 }
