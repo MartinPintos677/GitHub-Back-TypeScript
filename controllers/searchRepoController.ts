@@ -1,5 +1,5 @@
 import { Request, Response } from 'express'
-import SearchRepository, { ISearchRepository } from '../models/SearchRepository'
+import SearchRepository from '../models/SearchRepository'
 import { IUser } from '../models/User'
 import axios from 'axios'
 
