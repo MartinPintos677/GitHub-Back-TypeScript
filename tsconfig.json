@@ -6,10 +6,6 @@
     "moduleResolution": "node",
     "sourceMap": true,
     "outDir": "dist",
-    "types": [
-      "node",
-      "method-override"
-    ],
   },
   "lib": [
     "es2015"
