@@ -70,14 +70,9 @@ const searchRepositorySchema = new Schema<ISearchRepository>({
 
 searchRepositorySchema.set('toJSON', { virtuals: true })
 
-/*const SearchRepository = model<ISearchRepository>(
-  'SearchRepository',
-  searchRepositorySchema
-)*/
-
-export default model<ISearchRepository>(
+const SearchRepository = model<ISearchRepository>(
   'SearchRepository',
   searchRepositorySchema
 )
 
-//export default SearchRepository
+export default SearchRepository

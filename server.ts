@@ -32,7 +32,7 @@ process.on('SIGINT', async function () {
   try {
     await db.db.close()
     console.log(
-      'Mongoose default connection is disconnected due to application termination.\n'
+      'La conexión predeterminada de Mongoose se desconecta debido a la finalización de la aplicación.\n'
     )
     process.exit(0)
   } catch (error) {
