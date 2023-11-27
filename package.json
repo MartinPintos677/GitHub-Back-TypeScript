@@ -9,7 +9,7 @@
     "seeders": "ts-node seeders/runAllSeeders.ts"
   },
   "keywords": [],
-  "author": "Sil Bau",
+  "author": "MP",
   "license": "ISC",
   "dependencies": {
     "axios": "^1.6.2",
